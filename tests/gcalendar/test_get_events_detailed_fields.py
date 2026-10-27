@@ -188,3 +188,23 @@ async def test_basic_ranged_output_is_unchanged():
 
     assert "Color ID" not in result
     assert "Recurring Event ID" not in result
+
+
+@pytest.mark.asyncio
+@both_branches
+async def test_event_label_id_is_surfaced(detail):
+    """A Calendar label (eventLabelId) supersedes colorId; a label-only colour has no colorId."""
+    labelled = {k: v for k, v in ORDINARY_MEETING.items() if k != "colorId"}
+    labelled["eventLabelId"] = "477e0d5c-eecb-4771-bbe2-14808d15b9ba"
+    result = await detail(labelled)
+
+    assert "Label ID: 477e0d5c-eecb-4771-bbe2-14808d15b9ba" in result
+    assert "Color ID: None" in result
+
+
+@pytest.mark.asyncio
+@both_branches
+async def test_missing_label_id_renders_as_none(detail):
+    result = await detail(ORDINARY_MEETING)
+
+    assert "Label ID: None" in result

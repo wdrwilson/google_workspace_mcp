@@ -314,3 +314,46 @@ async def test_manage_event_rejects_invalid_send_updates(action):
             response="accepted",
             send_updates="invalid",
         )
+
+
+@pytest.mark.asyncio
+async def test_modify_event_sets_event_label_with_label_version():
+    mock_service = _create_mock_service()
+    request = mock_service.events().patch.return_value
+    request.uri = "https://www.googleapis.com/calendar/v3/calendars/primary/events/evt1?conferenceDataVersion=1&alt=json"
+    request.execute = Mock(return_value={"id": "evt1", "summary": "VetRight"})
+
+    await _modify_event_impl(
+        service=mock_service,
+        user_google_email="user@example.com",
+        event_id="evt1",
+        event_label_id="477e0d5c-eecb-4771-bbe2-14808d15b9ba",
+        send_updates="none",
+    )
+
+    body = mock_service.events().patch.call_args.kwargs["body"]
+    assert body["eventLabelId"] == "477e0d5c-eecb-4771-bbe2-14808d15b9ba"
+    assert "colorId" not in body
+    assert request.uri.endswith("&eventLabelVersion=1")
+
+
+@pytest.mark.asyncio
+async def test_modify_event_without_label_leaves_label_version_off():
+    mock_service = _create_mock_service()
+    request = mock_service.events().patch.return_value
+    original = "https://www.googleapis.com/calendar/v3/calendars/primary/events/evt1?alt=json"
+    request.uri = original
+    request.execute = Mock(return_value={"id": "evt1", "summary": "VetRight"})
+
+    await _modify_event_impl(
+        service=mock_service,
+        user_google_email="user@example.com",
+        event_id="evt1",
+        color_id="9",
+        send_updates="none",
+    )
+
+    body = mock_service.events().patch.call_args.kwargs["body"]
+    assert body["colorId"] == "9"
+    assert "eventLabelId" not in body
+    assert request.uri == original

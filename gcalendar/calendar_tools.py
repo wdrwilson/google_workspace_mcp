@@ -917,6 +917,7 @@ async def _modify_event_impl(
     transparency: Optional[str] = None,
     visibility: Optional[str] = None,
     color_id: Optional[str] = None,
+    event_label_id: Optional[str] = None,
     recurrence: Optional[List[str]] = None,
     guests_can_modify: Optional[bool] = None,
     guests_can_invite_others: Optional[bool] = None,
@@ -964,6 +965,10 @@ async def _modify_event_impl(
 
     if color_id is not None:
         event_body["colorId"] = color_id
+    if event_label_id is not None:
+        # A Calendar label (any colour in Calendar's picker, e.g. Eucalyptus), which supersedes the
+        # 1-11 colorId. Google reads it only with eventLabelVersion=1 (added to the request below).
+        event_body["eventLabelId"] = event_label_id
     if recurrence is not None:
         event_body["recurrence"] = recurrence
 
@@ -1117,19 +1122,22 @@ async def _modify_event_impl(
                 f"[modify_event] Error during pre-update verification, but proceeding with update: {get_error}"
             )
 
-    updated_event = await asyncio.to_thread(
-        lambda: (
-            service.events()
-            .patch(
-                calendarId=calendar_id,
-                eventId=event_id,
-                body=event_body,
-                conferenceDataVersion=1,
-                sendUpdates=send_updates,
-            )
-            .execute()
+    def _patch():
+        request = service.events().patch(
+            calendarId=calendar_id,
+            eventId=event_id,
+            body=event_body,
+            conferenceDataVersion=1,
+            sendUpdates=send_updates,
         )
-    )
+        if event_label_id is not None:
+            # Only when a label is given: with eventLabelVersion=1 Google also treats a body
+            # without eventLabelId as "remove the label". Set on the URI so it works with any
+            # google-api-python-client discovery document.
+            request.uri += ("&" if "?" in request.uri else "?") + "eventLabelVersion=1"
+        return request.execute()
+
+    updated_event = await asyncio.to_thread(_patch)
 
     link = updated_event.get("htmlLink", "No link available")
     confirmation_message = f"Successfully modified event '{updated_event.get('summary', summary)}' (ID: {event_id}) for {user_google_email}. Link: {link}"
@@ -1308,6 +1316,7 @@ async def manage_event(
     transparency: Optional[str] = None,
     visibility: Optional[str] = None,
     color_id: Optional[str] = None,
+    event_label_id: Optional[str] = None,
     recurrence: Optional[StringList] = None,
     guests_can_modify: Optional[bool] = None,
     guests_can_invite_others: Optional[bool] = None,
@@ -1349,6 +1358,9 @@ async def manage_event(
         transparency (Optional[str]): "opaque" (busy) or "transparent" (free).
         visibility (Optional[str]): "default", "public", "private", or "confidential".
         color_id (Optional[str]): Event color ID (1-11, update only).
+        event_label_id (Optional[str]): Calendar label ID to give the event (update only). Labels carry
+            any colour in Calendar's picker (e.g. Eucalyptus) and supersede color_id. Sent with
+            eventLabelVersion=1.
         recurrence (Optional[List[str]]): RFC5545 recurrence rules for a recurring event, e.g. ["RRULE:FREQ=WEEKLY;COUNT=10"].
         guests_can_modify (Optional[bool]): Whether attendees can modify.
         guests_can_invite_others (Optional[bool]): Whether attendees can invite others.
@@ -1435,6 +1447,7 @@ async def manage_event(
             transparency=transparency,
             visibility=visibility,
             color_id=color_id,
+            event_label_id=event_label_id,
             recurrence=recurrence,
             guests_can_modify=guests_can_modify,
             guests_can_invite_others=guests_can_invite_others,

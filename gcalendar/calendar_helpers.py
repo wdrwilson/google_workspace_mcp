@@ -141,6 +141,9 @@ def _format_event_detail_lines(
         f"{prefix}Description: {item.get('description', 'No Description')}",
         f"{prefix}Location: {item.get('location', 'No Location')}",
         f"{prefix}Color ID: {item.get('colorId', 'None')}",
+        # Calendar labels (any colour in Calendar's picker) supersede colorId; an event with a
+        # label-only colour such as Eucalyptus has a Label ID and no Color ID.
+        f"{prefix}Label ID: {item.get('eventLabelId', 'None')}",
     ]
 
     recurring_event_id = item.get("recurringEventId")
